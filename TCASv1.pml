@@ -32,10 +32,25 @@ active [NumProcesses] proctype Aircraft() {
 
 	airspace.x[index.x].y[index.y].z[index.z] = 1;
 
-/*2. Send interrogation message and recieve responses*/
+/*
+  2.1 Send interrogation message 
+  2.2 Receive interrogation msgs and Send responses
+  2.3  Recieve responses
+*/
+	byte otherAircraftPid;
+	Point otherAircraftlocation;
+	chan otherAircraftRecvChan;
 	do
 	:: interrogation!recv_chan
-	:: (nempty(interrogation) && 
+	:: 	if
+		:: interrogation?eval(recv_chan) -> skip /*skip reading from interrogation channel if the recv_chan in the front is my own*/
+		:: else -> 
+			interrogation?otherAircraftRecvChan;
+			otherAircraftRecvChan!_pid,index;
+		fi;
+	:: recv_chan?otherAircraftPid,otherAircraftlocation
+	od;
+			
 }
 
 
