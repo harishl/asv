@@ -1,7 +1,7 @@
 #define airspace_xlim 5
 #define airspace_ylim 5
 #define airspace_zlim 5
-#define NumProcesses 10 /*Number of Aircraft processes to be created*/
+#define NumProcesses 3 /*Number of Aircraft processes to be created*/
 
 /*Air space*/
 typedef Z { bit z[airspace_zlim] };
@@ -17,7 +17,8 @@ chan interrogation = [5] of {chan};
 
 active [NumProcesses] proctype Aircraft() {
 	Point index; // index keeps track of the location of this aircraft in the airspace
-	chan recv_chan = [5] of {byte, Point}; // {_pid, location} of sender aircraft in airspace
+	chan recv_chan = [5] of {byte, Point}; // recv_chan is owned by this aircraft. {_pid, location} of sender aircraft in airspace
+	chan otherAircraftRecvChan = [5] of {byte, Point}; // otherAircraftRecvChan is a place holder of the recv_chan of another process
 
 /*1. Assign a random initial location in the airspace for this aircraft*/
 	byte randomNum;
@@ -35,19 +36,15 @@ active [NumProcesses] proctype Aircraft() {
 /*
   2.1 Send interrogation message 
   2.2 Receive interrogation msgs and Send responses
-  2.3  Recieve responses
+  2.3 Recieve responses
 */
 	byte otherAircraftPid;
 	Point otherAircraftlocation;
-	chan otherAircraftRecvChan;
 	do
 	:: interrogation!recv_chan
-	:: 	if
-		:: interrogation?eval(recv_chan) -> skip /*skip reading from interrogation channel if the recv_chan in the front is my own*/
-		:: else -> 
-			interrogation?otherAircraftRecvChan;
-			otherAircraftRecvChan!_pid,index;
-		fi;
+	:: nempty(interrogation) && !(interrogation?[eval(recv_chan)]) -> 
+		interrogation?otherAircraftRecvChan; 
+		otherAircraftRecvChan!_pid,index;
 	:: recv_chan?otherAircraftPid,otherAircraftlocation
 	od;
 			
