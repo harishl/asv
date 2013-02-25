@@ -2,6 +2,7 @@
 #define airspace_ylim 5
 #define airspace_zlim 5
 #define NumProcesses 3 /*Number of Aircraft processes to be created*/
+#define maxVelocityScale 6
 
 /*Air space*/
 typedef Z { bit z[airspace_zlim] };
@@ -53,15 +54,25 @@ active [NumProcesses] proctype Aircraft() {
 	::!(direction.xdir == stay && direction.ydir == stay && direction.zdir == stay) && direction.xdir != 0 && direction.ydir != 0 && direction.zdir != 0 -> break
 	od;
 
+/*3. Choose a speed for the aircraft in the scale of 1 to maxVelocityScale*/
+	byte velocity_scale = maxVelocityScale;
+	do
+	:: velocity_scale > 0 -> velocity_scale--
+	:: break
+	od;
+
 /*
-  3.1 Send interrogation message 
-  3.2 Receive interrogation msgs and Send responses
-  3.3 Recieve responses
+  4.1 Move Aircraft as per speed
+  4.2 Send interrogation message 
+  4.3 Receive interrogation msgs and Send responses
+  4.4 Recieve responses
 */
+	byte ctr; // counter to enforce speed
 	byte otherAircraftPid;
 	Point otherAircraftlocation;
 	do
-	::/*Move aircraft in its direction*/
+	:: ctr == 0 -> 
+	  /*Move aircraft in its direction*/
 	  atomic {
 		airspace.x[index.x].y[index.y].z[index.z] = 0; // unsetting occuancy in current location
 		// movement in x direction
@@ -99,11 +110,14 @@ active [NumProcesses] proctype Aircraft() {
 		
 		airspace.x[index.x].y[index.y].z[index.z] = 0; //setting occupancy in the new location
 	  }
-	::interrogation!recv_chan
-	::nempty(interrogation) && !(interrogation?[eval(recv_chan)]) -> 
+	::ctr != 0 -> 
+		interrogation!recv_chan; ctr = (ctr+1)%velocity_scale;
+	::ctr != 0 && nempty(interrogation) && !(interrogation?[eval(recv_chan)]) -> 
 		interrogation?otherAircraftRecvChan; 
 		otherAircraftRecvChan!_pid,index;
-	::recv_chan?otherAircraftPid,otherAircraftlocation
+		ctr = (ctr+1)%velocity_scale;
+	::ctr != 0 -> 
+		recv_chan?otherAircraftPid,otherAircraftlocation; ctr = (ctr+1)%velocity_scale;
 	od;
 			
 }
