@@ -1,10 +1,10 @@
-#define true 1
-#define false 0
 #define airspace_xlim 5
 #define airspace_ylim 5
 #define airspace_zlim 5
 #define NumProcesses 3 /*Number of Aircraft processes to be created*/
-#define maxVelocityScale 6
+#define maxVelocityScale 4
+#define RA_proportionality_const 1
+#define TA_proportionality_const 2
 
 /*Air space*/
 typedef Z { bit z[airspace_zlim] };
@@ -103,8 +103,8 @@ active [NumProcesses] proctype Aircraft() {
 /*3. Choose a speed for the aircraft in the scale of 1 to maxVelocityScale*/
 	byte velocity_scale = maxVelocityScale;
 	do
-	:: velocity_scale > 0 -> velocity_scale--
-	:: break
+	::velocity_scale > 0 -> velocity_scale--
+	::break
 	od;
 
 /*
@@ -115,7 +115,8 @@ active [NumProcesses] proctype Aircraft() {
 */
 	byte ctr; // counter to enforce speed
 	byte otherAircraftPid;
-	Point otherAircraftlocation;
+	Point otherAircraftLocation;
+	bit isOtherAircraftInRA, isOtherAircraftInTA;
 	do	
 	::interrogation!recv_chan; 
 	  move();
@@ -125,7 +126,21 @@ active [NumProcesses] proctype Aircraft() {
 		otherAircraftRecvChan!_pid,index;
 		move();
 
-	::recv_chan?otherAircraftPid,otherAircraftlocation; 
+	::recv_chan?otherAircraftPid,otherAircraftLocation; 
+	  byte numCellsRA = RA_proportionality_const * velocity_scale;
+	  byte numCellsTA = TA_proportionality_const * velocity_scale;
+	  if
+	  ::((otherAircraftLocation.x - index.x) <=  numCellsRA || (index.x - otherAircraftLocation.x) <= numCellsRA) &&
+	    ((otherAircraftLocation.y - index.y) <=  numCellsRA || (index.y - otherAircraftLocation.y) <= numCellsRA) &&
+	    ((otherAircraftLocation.z - index.z) <=  numCellsRA || (index.z - otherAircraftLocation.z) <= numCellsRA) -> isOtherAircraftInRA = 1;
+	  ::else -> skip
+	  fi;
+	  if
+	  ::((otherAircraftLocation.x - index.x) <=  numCellsTA || (index.x - otherAircraftLocation.x) <= numCellsTA) &&
+	    ((otherAircraftLocation.y - index.y) <=  numCellsTA || (index.y - otherAircraftLocation.y) <= numCellsTA) &&
+	    ((otherAircraftLocation.z - index.z) <=  numCellsTA || (index.z - otherAircraftLocation.z) <= numCellsTA) && isOtherAircraftInRA != 1 -> isOtherAircraftInTA = 1; 
+	  ::else -> skip
+	  fi;
 	  move();
 	od;
 			
