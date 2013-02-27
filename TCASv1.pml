@@ -1,3 +1,5 @@
+#define true 1
+#define false 0
 #define airspace_xlim 5
 #define airspace_ylim 5
 #define airspace_zlim 5
@@ -18,6 +20,50 @@ chan interrogation = [5] of {chan};
 
 mtype = {fwd, bkd, left, right, above, below, stay};
 typedef Direction {mtype xdir; mtype ydir; mtype zdir};
+
+inline move() {
+	ctr = (ctr+1)%velocity_scale;
+	if
+	::ctr == 0 -> 
+		/*Move aircraft in its direction*/
+		atomic {
+		airspace.x[index.x].y[index.y].z[index.z] = 0; // unsetting occuancy in current location
+		// movement in x direction
+		if
+		::direction.xdir == fwd && index.x < (airspace_xlim-1) -> index.x++ 
+		::direction.xdir == fwd && index.x == (airspace_xlim-1) -> index.x = 0
+		::direction.xdir == fwd && index.x == (airspace_xlim-1) -> direction.xdir = bkd; index.x--
+		::direction.xdir == bkd && index.x > 0 -> index.x--
+		::direction.xdir == bkd && index.x == 0 -> index.x = (airspace_xlim-1)
+		::direction.xdir == bkd && index.x == 0 -> direction.xdir = fwd; index.x++
+		::else -> skip
+		fi;
+		// movement in y direction
+		if
+		::direction.ydir == left && index.y < (airspace_ylim-1) -> index.y++ 
+		::direction.ydir == left && index.y == (airspace_ylim-1) -> index.y = 0
+		::direction.ydir == left && index.y == (airspace_ylim-1) -> direction.ydir = right; index.y--
+		::direction.ydir == right && index.y > 0 -> index.y--
+		::direction.ydir == right && index.y == 0 -> index.y = (airspace_ylim-1)
+		::direction.ydir == right && index.y == 0 -> direction.ydir = left; index.y++
+		::else -> skip
+		fi;
+		// movement in z direction
+		if
+		::direction.zdir == above && index.z < (airspace_zlim-1) -> index.z++ 
+		::direction.zdir == above && index.z == (airspace_zlim-1) -> index.z = 0
+		::direction.zdir == above && index.z == (airspace_zlim-1) -> direction.zdir = below; index.z--
+		::direction.zdir == below && index.z > 0 -> index.z--
+		::direction.zdir == below && index.z == 0 -> index.z = (airspace_zlim-1)
+		::direction.zdir == below && index.z == 0 -> direction.zdir = above; index.z++
+		::else -> skip
+		fi;
+	
+		airspace.x[index.x].y[index.y].z[index.z] = 1; //setting occupancy in the new location
+		}
+	::else -> skip
+	fi;
+}
 
 active [NumProcesses] proctype Aircraft() {
 	Point index; // index keeps track of the location of this aircraft in the airspace
@@ -70,54 +116,17 @@ active [NumProcesses] proctype Aircraft() {
 	byte ctr; // counter to enforce speed
 	byte otherAircraftPid;
 	Point otherAircraftlocation;
-	do
-	:: ctr == 0 -> 
-	  /*Move aircraft in its direction*/
-	  atomic {
-		airspace.x[index.x].y[index.y].z[index.z] = 0; // unsetting occuancy in current location
-		// movement in x direction
-		if
-		::direction.xdir == fwd && index.x < (airspace_xlim-1) -> index.x++ 
-		::direction.xdir == fwd && index.x == (airspace_xlim-1) -> index.x = 0
-		::direction.xdir == fwd && index.x == (airspace_xlim-1) -> direction.xdir = bkd; index.x--
-		::direction.xdir == bkd && index.x > 0 -> index.x--
-		::direction.xdir == bkd && index.x == 0 -> index.x = (airspace_xlim-1)
-		::direction.xdir == bkd && index.x == 0 -> direction.xdir = fwd; index.x++
-		::else -> skip
-		fi;
-
-		// movement in y direction
-		if
-		::direction.ydir == left && index.y < (airspace_ylim-1) -> index.y++ 
-		::direction.ydir == left && index.y == (airspace_ylim-1) -> index.y = 0
-		::direction.ydir == left && index.y == (airspace_ylim-1) -> direction.ydir = right; index.y--
-		::direction.ydir == right && index.y > 0 -> index.y--
-		::direction.ydir == right && index.y == 0 -> index.y = (airspace_ylim-1)
-		::direction.ydir == right && index.y == 0 -> direction.ydir = left; index.y++
-		::else -> skip
-		fi;
-
-		// movement in z direction
-		if
-		::direction.zdir == above && index.z < (airspace_zlim-1) -> index.z++ 
-		::direction.zdir == above && index.z == (airspace_zlim-1) -> index.z = 0
-		::direction.zdir == above && index.z == (airspace_zlim-1) -> direction.zdir = below; index.z--
-		::direction.zdir == below && index.z > 0 -> index.z--
-		::direction.zdir == below && index.z == 0 -> index.z = (airspace_zlim-1)
-		::direction.zdir == below && index.z == 0 -> direction.zdir = above; index.z++
-		::else -> skip
-		fi;
+	do	
+	::interrogation!recv_chan; 
+	  move();
 		
-		airspace.x[index.x].y[index.y].z[index.z] = 0; //setting occupancy in the new location
-	  }
-	::ctr != 0 -> 
-		interrogation!recv_chan; ctr = (ctr+1)%velocity_scale;
-	::ctr != 0 && nempty(interrogation) && !(interrogation?[eval(recv_chan)]) -> 
+	::nempty(interrogation) && !(interrogation?[eval(recv_chan)]) -> 
 		interrogation?otherAircraftRecvChan; 
 		otherAircraftRecvChan!_pid,index;
-		ctr = (ctr+1)%velocity_scale;
-	::ctr != 0 -> 
-		recv_chan?otherAircraftPid,otherAircraftlocation; ctr = (ctr+1)%velocity_scale;
+		move();
+
+	::recv_chan?otherAircraftPid,otherAircraftlocation; 
+	  move();
 	od;
 			
 }
