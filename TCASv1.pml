@@ -65,6 +65,53 @@ inline move() {
 	fi;
 }
 
+inline computeDistance(numCells) {
+	  //compute distance along x axis
+	  xDist = 255; // infinity (ideally)
+	  i = 1;
+	  do
+	  ::i <= numCells && otherAircraftLocation.x != (index.x+i)%airspace_xlim -> i++;
+	  ::i <= numCells && otherAircraftLocation.x == (index.x+i)%airspace_xlim -> xDist = i; break; 
+	  ::else -> break
+	  od;
+	  i = 1;
+	  do
+	  ::i <= numCells && (airspace_xlim - otherAircraftLocation.x - 1) != (airspace_xlim - index.x - 1 + i)%airspace_xlim -> i++;
+	  ::i <= numCells && (airspace_xlim - otherAircraftLocation.x - 1) == (airspace_xlim - index.x - 1 + i)%airspace_xlim -> xDist = i; break;
+	  ::else -> break
+	  od;
+	
+	  //compute distance along y axis
+	  yDist = 255; // infinity (ideally)
+	  i = 1;
+	  do
+	  ::i <= numCells && otherAircraftLocation.y != (index.y+i)%airspace_ylim -> i++;
+	  ::i <= numCells && otherAircraftLocation.y == (index.y+i)%airspace_ylim -> yDist = i; break;
+	  ::else -> break
+	  od;
+	  i = 1;
+	  do
+	  ::i <= numCells && (airspace_ylim - otherAircraftLocation.y - 1) != (airspace_ylim - index.y - 1 + i)%airspace_ylim -> i++;
+	  ::i <= numCells && (airspace_ylim - otherAircraftLocation.y - 1) == (airspace_ylim - index.y - 1 + i)%airspace_ylim -> yDist = i; break;
+	  ::else -> break
+	  od;
+
+	  //compute distance along z axis
+	  zDist = 255; // infinity (ideally)
+	  i = 1;
+	  do
+	  ::i <= numCells && otherAircraftLocation.z != (index.z+i)%airspace_zlim -> i++;
+	  ::i <= numCells && otherAircraftLocation.z == (index.z+i)%airspace_zlim -> zDist = i; break;
+	  ::else -> break
+	  od;
+	  i = 1;
+	  do
+	  ::i <= numCells && (airspace_zlim - otherAircraftLocation.z - 1) != (airspace_zlim - index.z - 1 + i)%airspace_zlim -> i++;
+	  ::i <= numCells && (airspace_zlim - otherAircraftLocation.z - 1) == (airspace_zlim - index.z - 1 + i)%airspace_zlim -> zDist = i; break;
+	  ::else -> break
+	  od;
+}
+
 active [NumProcesses] proctype Aircraft() {
 	Point index; // index keeps track of the location of this aircraft in the airspace
 	chan recv_chan = [5] of {byte, Point}; // recv_chan is owned by this aircraft. {_pid, location} of sender aircraft in airspace
@@ -127,20 +174,24 @@ active [NumProcesses] proctype Aircraft() {
 		move();
 
 	::recv_chan?otherAircraftPid,otherAircraftLocation; 
-	  byte numCellsRA = RA_proportionality_const * velocity_scale;
-	  byte numCellsTA = TA_proportionality_const * velocity_scale;
+	  byte xDist, yDist, zDist, i;
+	  bit otherAircraftInRA, otherAircraftInTA;
+	  computeDistance(RA_proportionality_const * velocity_scale);
 	  if
-	  ::((otherAircraftLocation.x - index.x) <=  numCellsRA || (index.x - otherAircraftLocation.x) <= numCellsRA) &&
-	    ((otherAircraftLocation.y - index.y) <=  numCellsRA || (index.y - otherAircraftLocation.y) <= numCellsRA) &&
-	    ((otherAircraftLocation.z - index.z) <=  numCellsRA || (index.z - otherAircraftLocation.z) <= numCellsRA) -> isOtherAircraftInRA = 1;
-	  ::else -> skip
+	  ::xDist < airspace_xlim && yDist < airspace_ylim && zDist < airspace_zlim -> otherAircraftInRA = 1
+	  ::else -> 
+		otherAircraftInRA = 0;
+		computeDistance(TA_proportionality_const * velocity_scale);
+		if
+	  	::xDist < airspace_xlim && yDist < airspace_ylim && zDist < airspace_zlim -> otherAircraftInTA = 1
+		::else -> otherAircraftInTA = 0
+	  	fi;
 	  fi;
-	  if
-	  ::((otherAircraftLocation.x - index.x) <=  numCellsTA || (index.x - otherAircraftLocation.x) <= numCellsTA) &&
-	    ((otherAircraftLocation.y - index.y) <=  numCellsTA || (index.y - otherAircraftLocation.y) <= numCellsTA) &&
-	    ((otherAircraftLocation.z - index.z) <=  numCellsTA || (index.z - otherAircraftLocation.z) <= numCellsTA) && isOtherAircraftInRA != 1 -> isOtherAircraftInTA = 1; 
-	  ::else -> skip
-	  fi;
+
+
+
+	 
+
 	  move();
 	od;
 			
