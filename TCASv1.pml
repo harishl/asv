@@ -2,7 +2,7 @@
 #define airspace_ylim 5
 #define airspace_zlim 5
 #define NumProcesses 3 /*Number of Aircraft processes to be created*/
-#define maxVelocityScale 4
+#define maxVelocity 4
 #define RA_proportionality_const 1
 #define TA_proportionality_const 2
 
@@ -22,12 +22,12 @@ mtype = {fwd, bkd, left, right, above, below, stay};
 typedef Direction {mtype xdir; mtype ydir; mtype zdir};
 
 inline move() {
-	ctr = (ctr+1)%velocity_scale;
+	ctr = (ctr+1)%(maxVelocity - velocity + 1);
 	if
 	::ctr == 0 -> 
 		/*Move aircraft in its direction*/
 		atomic {
-		airspace.x[index.x].y[index.y].z[index.z] = 0; // unsetting occuancy in current location
+		airspace.x[index.x].y[index.y].z[index.z] = 0; // unsetting occupancy in current location
 		// movement in x direction
 		if
 		::direction.xdir == fwd && index.x < (airspace_xlim-1) -> index.x++ 
@@ -147,10 +147,12 @@ active [NumProcesses] proctype Aircraft() {
 	::!(direction.xdir == stay && direction.ydir == stay && direction.zdir == stay) && direction.xdir != 0 && direction.ydir != 0 && direction.zdir != 0 -> break
 	od;
 
-/*3. Choose a speed for the aircraft in the scale of 1 to maxVelocityScale*/
-	byte velocity_scale = maxVelocityScale;
+/*3. Choose a speed for the aircraft in the scale of 1 to maxVelocity; 1 being slowest and maxVelocity being fastest. 
+An aircraft with velocity 1 will take maxVelocity steps to move 1 cell; an aircraft with velocity 2 will take maxVelocity-1 steps to move 1 cell; and so on; 
+an aircraft with velocity = maxVelocity will take 1 step to move 1 cell. */
+	byte velocity = maxVelocity;
 	do
-	::velocity_scale > 0 -> velocity_scale--
+	::velocity > 0 -> velocity--
 	::break
 	od;
 
@@ -163,7 +165,7 @@ active [NumProcesses] proctype Aircraft() {
 	byte ctr; // counter to enforce speed
 	byte otherAircraftPid;
 	Point otherAircraftLocation;
-	bit isOtherAircraftInRA, isOtherAircraftInTA;
+	bit otherAircraftInRA, otherAircraftInTA;
 	do	
 	::interrogation!recv_chan; 
 	  move();
@@ -175,23 +177,17 @@ active [NumProcesses] proctype Aircraft() {
 
 	::recv_chan?otherAircraftPid,otherAircraftLocation; 
 	  byte xDist, yDist, zDist, i;
-	  bit otherAircraftInRA, otherAircraftInTA;
-	  computeDistance(RA_proportionality_const * velocity_scale);
+	  computeDistance(RA_proportionality_const * velocity);
 	  if
 	  ::xDist < airspace_xlim && yDist < airspace_ylim && zDist < airspace_zlim -> otherAircraftInRA = 1
 	  ::else -> 
 		otherAircraftInRA = 0;
-		computeDistance(TA_proportionality_const * velocity_scale);
+		computeDistance(TA_proportionality_const * velocity);
 		if
 	  	::xDist < airspace_xlim && yDist < airspace_ylim && zDist < airspace_zlim -> otherAircraftInTA = 1
 		::else -> otherAircraftInTA = 0
 	  	fi;
 	  fi;
-
-
-
-	 
-
 	  move();
 	od;
 			
