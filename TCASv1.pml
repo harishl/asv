@@ -240,6 +240,7 @@ Loop:	do
 		::Advisory_chan?descend; direction.zdir = below; move(); goto Loop
 		::Advisory_chan?climb; direction.zdir = above; move(); goto Loop
 		::Advisory_chan?maintain; move(); goto Loop
+		::Advisory_chan?traffic; move(); goto Loop
 		::Advisory_chan?collided; /* Mayday! Mayday! ... and Boom! */
 		fi;
 	};
