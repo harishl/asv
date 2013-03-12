@@ -1,6 +1,6 @@
-#define airspace_xlim 15
-#define airspace_ylim 15
-#define airspace_zlim 15
+#define airspace_xlim 6
+#define airspace_ylim 6
+#define airspace_zlim 6
 #define NumAircraft 12 /*Number of Aircraft processes to be created*/
 #define maxVelocity 3
 #define RA_proportionality_const 1
@@ -115,16 +115,6 @@ inline computeDistance(numCells) {
 }
 
 inline computeRA() {
-	Point myLoc;
-	myLoc.x = index.x;
-	myLoc.y = index.y;
-	myLoc.z = index.z;	
-	Point otherLoc;
-	otherLoc.x = otherAircraftInfo.location.x;
-	otherLoc.y = otherAircraftInfo.location.y;
-	otherLoc.z = otherAircraftInfo.location.z;
-	byte stepCtr = 1;
-
 	if
 	::direction.zdir != above -> advisory = climb; direction.zdir = above;
 	::direction.zdir != below -> advisory = descend; direction.zdir = below;
@@ -195,7 +185,7 @@ an aircraft with velocity = maxVelocity will take 1 step to move 1 cell. */
 	AircraftInfo myAircraftInfo, otherAircraftInfo;
 	bit otherAircraftInRA, otherAircraftInTA;
 	mtype advisory;
-	byte timeBeforeCollision;
+	
 Loop:	do	
 	::nempty(interrogation) && !(interrogation?[eval(recv_chan)]) -> 
 		interrogation?otherAircraftRecvChan; 
@@ -218,7 +208,6 @@ Loop:	do
 		computeRA();
 		otherAircraftInRA = 1; 
 		
-		
 	  ::else -> 
 		otherAircraftInRA = 0;
 		computeDistance(TA_proportionality_const * velocity);
@@ -227,25 +216,25 @@ Loop:	do
 		::else -> otherAircraftInTA = 0
 	  	fi;
 	  fi;
+	  assert (! (otherAircraftInRA) || (xDist<=(RA_proportionality_const*velocity) && yDist<=(RA_proportionality_const*velocity) && zDist<=(RA_proportionality_const*velocity)));
+	  assert (! (otherAircraftInTA) || (xDist<=(TA_proportionality_const*velocity) && yDist<=(TA_proportionality_const*velocity) && zDist<=(TA_proportionality_const*velocity)));
 	  move();
 	::interrogation!recv_chan; move();
-	od unless {
-		if
-		::otherAircraftInRA == 1 && advisory == climb		-> 	otherAircraftInfo.AdvChannel!descend; move(); goto Loop
-		::otherAircraftInRA == 1 && advisory == descend		->	otherAircraftInfo.AdvChannel!climb; move(); goto Loop
-		::otherAircraftInRA == 1 && advisory == maintain	-> 	otherAircraftInfo.AdvChannel!maintain; move(); goto Loop
-		::otherAircraftInRA == 1 && advisory == climb_faster	-> 	otherAircraftInfo.AdvChannel!descend; move(); goto Loop
-		::otherAircraftInRA == 1 && advisory == collided 	-> 	otherAircraftInfo.AdvChannel!collided; /* Mayday! Mayday! ... and Boom! */
-		::otherAircraftInTA == 1 && advisory == traffic 	-> 	otherAircraftInfo.AdvChannel!traffic; move(); goto Loop
-		::Advisory_chan?descend; direction.zdir = below; move(); goto Loop
-		::Advisory_chan?climb; direction.zdir = above; move(); goto Loop
-		::Advisory_chan?maintain; move(); goto Loop
-		::Advisory_chan?traffic; move(); goto Loop
-		::Advisory_chan?collided; /* Mayday! Mayday! ... and Boom! */
-		fi;
-	};
+	::otherAircraftInRA == 1 && advisory == climb		-> 	otherAircraftInfo.AdvChannel!descend; move(); goto Loop
+	::otherAircraftInRA == 1 && advisory == descend		->	otherAircraftInfo.AdvChannel!climb; move(); goto Loop
+	::otherAircraftInRA == 1 && advisory == maintain	-> 	otherAircraftInfo.AdvChannel!maintain; move(); goto Loop
+	::otherAircraftInRA == 1 && advisory == climb_faster	-> 	otherAircraftInfo.AdvChannel!descend; move(); goto Loop
+	::otherAircraftInRA == 1 && advisory == collided 	-> 	otherAircraftInfo.AdvChannel!collided; /* Mayday! Mayday! ... and Boom! */
+	::otherAircraftInTA == 1 && advisory == traffic 	-> 	otherAircraftInfo.AdvChannel!traffic; move(); goto Loop
+	::Advisory_chan?descend; direction.zdir = below; move(); goto Loop
+	::Advisory_chan?climb; direction.zdir = above; move(); goto Loop
+	::Advisory_chan?maintain; move(); goto Loop
+	::Advisory_chan?traffic; move(); goto Loop
+	::Advisory_chan?collided; /* Mayday! Mayday! ... and Boom! */
+	od;
 			
 }
+
 
 
 
