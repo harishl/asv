@@ -1,10 +1,11 @@
-#define airspace_xlim 6
-#define airspace_ylim 6
-#define airspace_zlim 6
-#define NumAircraft 12 /*Number of Aircraft processes to be created*/
-#define maxVelocity 3
+#define airspace_xlim 2
+#define airspace_ylim 2
+#define airspace_zlim 2
+#define NumAircraft 3 /*Number of Aircraft processes to be created*/
+#define maxVelocity 1
 #define RA_proportionality_const 1
 #define TA_proportionality_const 2
+#define show_stopper_bound 100 /*compromise to escape from unreasonable state spaces*/
 
 /*Air space*/
 typedef Z { bit z[airspace_zlim] };
@@ -15,15 +16,22 @@ AirSpace airspace;
 /*A point in the air space*/
 typedef Point {byte x; byte y; byte z };
 
-/*channel for interrogation*/
+/*channels*/
 chan interrogation = [100] of {chan};
 
 mtype = {fwd, bkd, left, right, above, below, stay};
-mtype = {climb, climb_faster, descend, descend_faster, maintain, traffic, collided}; 
+mtype = {climb, climb_faster, descend, maintain, traffic, collided, none}; 
 typedef Direction {mtype xdir; mtype ydir; mtype zdir};
 typedef AircraftInfo {Point location; Direction dir; byte speed; chan AdvChannel; };
 
+byte show_stopper[NumAircraft];
+
 inline move() {
+	if
+	::show_stopper[_pid] <= show_stopper_bound -> show_stopper[_pid] = show_stopper[_pid] + 1;
+	::else
+	fi;
+
 	speed_ctr = (speed_ctr+1)%(maxVelocity - velocity + 1);
 	if
 	::speed_ctr == 0 -> 
@@ -116,10 +124,9 @@ inline computeDistance(numCells) {
 
 inline computeRA() {
 	if
-	::direction.zdir != above -> advisory = climb; direction.zdir = above;
+	::direction.zdir != above -> advisory = climb; direction.zdir = above; 
 	::direction.zdir != below -> advisory = descend; direction.zdir = below;
 	::direction.zdir != above -> advisory = climb_faster; direction.zdir = above; velocity = maxVelocity; 
-	::direction.zdir != below -> advisory = descend_faster; direction.zdir = below; velocity = maxVelocity; 
 	fi;
 	
 	if
@@ -133,6 +140,8 @@ active [NumAircraft] proctype Aircraft() {
 	chan recv_chan = [100] of {byte, AircraftInfo}; // recv_chan is owned by this aircraft. {_pid, otherAircraftinformation} of sender aircraft in airspace
 	chan otherAircraftRecvChan = [100] of {byte, AircraftInfo}; // otherAircraftRecvChan is a place holder of the recv_chan of another process
 	chan Advisory_chan = [0] of {mtype};
+	bit messageSent;
+	byte xDist, yDist, zDist, i;
 
 /*1. Assign a random initial location in the airspace for this aircraft*/
 	byte randomNum;
@@ -173,7 +182,7 @@ an aircraft with velocity = maxVelocity will take 1 step to move 1 cell. */
 	::break
 	od;
 
-/* Main loop
+/* Main 	
   4.1 Move Aircraft as per speed
   4.2 Send interrogation message 
   4.3 Receive interrogation msgs and Send responses
@@ -186,7 +195,7 @@ an aircraft with velocity = maxVelocity will take 1 step to move 1 cell. */
 	bit otherAircraftInRA, otherAircraftInTA;
 	mtype advisory;
 	
-Loop:	do	
+end1:	do	
 	::nempty(interrogation) && !(interrogation?[eval(recv_chan)]) -> 
 		interrogation?otherAircraftRecvChan; 
 		myAircraftInfo.location.x = index.x;
@@ -201,7 +210,7 @@ Loop:	do
 		move();
 
 	::recv_chan?otherAircraftPid,otherAircraftInfo; 
-	  byte xDist, yDist, zDist, i;
+	  messageSent = 0;
 	  computeDistance(RA_proportionality_const * velocity);
 	  if
 	  ::xDist < airspace_xlim && yDist < airspace_ylim && zDist < airspace_zlim -> 
@@ -219,19 +228,57 @@ Loop:	do
 	  assert (! (otherAircraftInRA) || (xDist<=(RA_proportionality_const*velocity) && yDist<=(RA_proportionality_const*velocity) && zDist<=(RA_proportionality_const*velocity)));
 	  assert (! (otherAircraftInTA) || (xDist<=(TA_proportionality_const*velocity) && yDist<=(TA_proportionality_const*velocity) && zDist<=(TA_proportionality_const*velocity)));
 	  move();
-	::interrogation!recv_chan; move();
-	::otherAircraftInRA == 1 && advisory == climb		-> 	otherAircraftInfo.AdvChannel!descend; move(); goto Loop
-	::otherAircraftInRA == 1 && advisory == descend		->	otherAircraftInfo.AdvChannel!climb; move(); goto Loop
-	::otherAircraftInRA == 1 && advisory == maintain	-> 	otherAircraftInfo.AdvChannel!maintain; move(); goto Loop
-	::otherAircraftInRA == 1 && advisory == climb_faster	-> 	otherAircraftInfo.AdvChannel!descend; move(); goto Loop
-	::otherAircraftInRA == 1 && advisory == collided 	-> 	otherAircraftInfo.AdvChannel!collided; /* Mayday! Mayday! ... and Boom! */
-	::otherAircraftInTA == 1 && advisory == traffic 	-> 	otherAircraftInfo.AdvChannel!traffic; move(); goto Loop
-	::Advisory_chan?descend; direction.zdir = below; move(); goto Loop
-	::Advisory_chan?climb; direction.zdir = above; move(); goto Loop
-	::Advisory_chan?maintain; move(); goto Loop
-	::Advisory_chan?traffic; move(); goto Loop
-	::Advisory_chan?collided; /* Mayday! Mayday! ... and Boom! */
+	::messageSent == 0 -> interrogation!recv_chan; messageSent = 1; move();
+	::otherAircraftInRA == 1 && advisory == climb -> 
+		do
+		::otherAircraftInfo.AdvChannel!descend;
+		::timeout -> advisory = none; break;
+		od;
+		move();
+	::otherAircraftInRA == 1 && advisory == descend	-> 
+		do
+		::otherAircraftInfo.AdvChannel!climb;
+		::timeout -> advisory = none; break;
+		od;
+		move(); 
+	::otherAircraftInRA == 1 && advisory == maintain -> 
+		do
+		::otherAircraftInfo.AdvChannel!maintain;
+		::timeout -> advisory = none; break;
+		od;
+		move();
+	::otherAircraftInRA == 1 && advisory == climb_faster -> 
+		do
+		::otherAircraftInfo.AdvChannel!descend;
+		::timeout -> advisory = none; break;
+		od;
+		move();
+	::otherAircraftInRA == 1 && advisory == collided -> 
+		/* Mayday! Mayday! ... and Boom! */
+		do
+		::otherAircraftInfo.AdvChannel!collided;
+		::timeout -> advisory = none; break;
+		od;
+		break;
+	::otherAircraftInTA == 1 && advisory == traffic -> 
+		do
+		::otherAircraftInfo.AdvChannel!traffic;
+		::timeout -> advisory = none; break;
+		od;
+		move();
+	::Advisory_chan?descend; direction.zdir = below; move(); 
+	::Advisory_chan?climb; direction.zdir = above; move(); 
+	::Advisory_chan?maintain; move(); 
+	::Advisory_chan?traffic; move(); 
+	::Advisory_chan?collided; break;/* Mayday! Mayday! ... and Boom! */
+	::show_stopper[_pid] >= show_stopper_bound -> break; /*compromise to avoid unreasonably large state spaces*/
 	od;
+
+end2:	do
+	:: messageSent == 1 -> recv_chan?otherAircraftPid,otherAircraftInfo; messageSent = 0; 
+	:: else -> break
+	od;
+	
 			
 }
 
