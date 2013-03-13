@@ -1,7 +1,7 @@
-#define airspace_xlim 2
-#define airspace_ylim 2
-#define airspace_zlim 2
-#define NumAircraft 3 /*Number of Aircraft processes to be created*/
+#define airspace_xlim 5
+#define airspace_ylim 5
+#define airspace_zlim 5
+#define NumAircraft 10 /*Number of Aircraft processes to be created*/
 #define maxVelocity 1
 #define RA_proportionality_const 1
 #define TA_proportionality_const 2
@@ -16,7 +16,7 @@ AirSpace airspace;
 /*A point in the air space*/
 typedef Point {byte x; byte y; byte z };
 
-/*channel for interrogation*/
+/*channels*/
 chan interrogation = [100] of {chan};
 
 mtype = {fwd, bkd, left, right, above, below, stay};
@@ -26,7 +26,17 @@ typedef AircraftInfo {Point location; Direction dir; byte speed; chan AdvChannel
 
 byte show_stopper[NumAircraft];
 
+/*declarations for properties*/
+bit messageSent[NumAircraft];
+bit collisions[NumAircraft];
+byte collisionTestPID;
+bit moveCalledAfterCollision;
+
 inline move() {
+	if
+	::collisions[_pid] == 1 -> moveCalledAfterCollision = 1;
+	::else
+	fi;
 	if
 	::show_stopper[_pid] <= show_stopper_bound -> show_stopper[_pid] = show_stopper[_pid] + 1;
 	::else
@@ -140,6 +150,7 @@ active [NumAircraft] proctype Aircraft() {
 	chan recv_chan = [100] of {byte, AircraftInfo}; // recv_chan is owned by this aircraft. {_pid, otherAircraftinformation} of sender aircraft in airspace
 	chan otherAircraftRecvChan = [100] of {byte, AircraftInfo}; // otherAircraftRecvChan is a place holder of the recv_chan of another process
 	chan Advisory_chan = [0] of {mtype};
+	byte xDist, yDist, zDist, i;
 
 /*1. Assign a random initial location in the airspace for this aircraft*/
 	byte randomNum;
@@ -193,7 +204,7 @@ an aircraft with velocity = maxVelocity will take 1 step to move 1 cell. */
 	bit otherAircraftInRA, otherAircraftInTA;
 	mtype advisory;
 	
-	do	
+end1:	do	
 	::nempty(interrogation) && !(interrogation?[eval(recv_chan)]) -> 
 		interrogation?otherAircraftRecvChan; 
 		myAircraftInfo.location.x = index.x;
@@ -208,7 +219,7 @@ an aircraft with velocity = maxVelocity will take 1 step to move 1 cell. */
 		move();
 
 	::recv_chan?otherAircraftPid,otherAircraftInfo; 
-	  byte xDist, yDist, zDist, i;
+	  messageSent[_pid] = 0;
 	  computeDistance(RA_proportionality_const * velocity);
 	  if
 	  ::xDist < airspace_xlim && yDist < airspace_ylim && zDist < airspace_zlim -> 
@@ -226,53 +237,80 @@ an aircraft with velocity = maxVelocity will take 1 step to move 1 cell. */
 	  assert (! (otherAircraftInRA) || (xDist<=(RA_proportionality_const*velocity) && yDist<=(RA_proportionality_const*velocity) && zDist<=(RA_proportionality_const*velocity)));
 	  assert (! (otherAircraftInTA) || (xDist<=(TA_proportionality_const*velocity) && yDist<=(TA_proportionality_const*velocity) && zDist<=(TA_proportionality_const*velocity)));
 	  move();
-	::interrogation!recv_chan; move();
+	::messageSent[_pid] == 0 -> interrogation!recv_chan; messageSent[_pid] = 1; move();
 	::otherAircraftInRA == 1 && advisory == climb -> 
 		do
 		::otherAircraftInfo.AdvChannel!descend;
-		::timeout
+		::timeout -> advisory = none; break;
 		od;
 		move();
 	::otherAircraftInRA == 1 && advisory == descend	-> 
 		do
 		::otherAircraftInfo.AdvChannel!climb;
-		::timeout -> break;
+		::timeout -> advisory = none; break;
 		od;
 		move(); 
 	::otherAircraftInRA == 1 && advisory == maintain -> 
 		do
 		::otherAircraftInfo.AdvChannel!maintain;
-		::timeout -> break;
+		::timeout -> advisory = none; break;
 		od;
 		move();
 	::otherAircraftInRA == 1 && advisory == climb_faster -> 
 		do
 		::otherAircraftInfo.AdvChannel!descend;
-		::timeout -> break;
+		::timeout -> advisory = none; break;
 		od;
 		move();
 	::otherAircraftInRA == 1 && advisory == collided -> 
 		/* Mayday! Mayday! ... and Boom! */
 		do
-		::otherAircraftInfo.AdvChannel!collided;
-		::timeout -> break;
+		::otherAircraftInfo.AdvChannel!collided; 
+		::timeout -> advisory = none; break; 
 		od;
+		collisions[_pid] = 1; 
 		break;
 	::otherAircraftInTA == 1 && advisory == traffic -> 
 		do
 		::otherAircraftInfo.AdvChannel!traffic;
-		::timeout -> break;
+		::timeout -> advisory = none; break;
 		od;
 		move();
 	::Advisory_chan?descend; direction.zdir = below; move(); 
 	::Advisory_chan?climb; direction.zdir = above; move(); 
 	::Advisory_chan?maintain; move(); 
 	::Advisory_chan?traffic; move(); 
-	::Advisory_chan?collided; break;/* Mayday! Mayday! ... and Boom! */
+	::Advisory_chan?collided; collisions[_pid] = 1; break;/* Mayday! Mayday! ... and Boom! */
 	::show_stopper[_pid] >= show_stopper_bound -> break; /*compromise to avoid unreasonably large state spaces*/
 	od;
-			
+
+end2:	do
+	:: messageSent[_pid] == 1 -> recv_chan?otherAircraftPid,otherAircraftInfo; messageSent[_pid] = 0; 
+	:: else -> break
+	od;		
 }
+
+
+proctype changeCollisionTestPID() {
+	do
+	::select(collisionTestPID : 0..(NumAircraft));
+	od;
+}
+/*Each airplane can have atmost 1 message in the interrogation channel. It sends another message only if it has received replies for all of its previously sent messages. */
+ltl num_interrogations { [] (len(interrogation) < NumAircraft) };
+
+/*Aircraft should keep moving often till it collides or terminates*/
+ltl collision_releases_movement { (collisions[collisionTestPID] == 0) U ([] !(moveCall(collisionTestPID))) };
+
+never {
+	do
+	::moveCalledAfterCollision == 1; break;
+	::else
+	od;
+}
+
+
+
 
 
 
