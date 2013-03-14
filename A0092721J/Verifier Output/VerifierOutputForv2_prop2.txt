@@ -1,0 +1,38 @@
+pan: reached -DMEMLIM bound
+	2.14193e+09 bytes used
+	6.5536e+06 bytes more needed
+	2.14748e+09 bytes limit
+
+(Spin Version 6.2.3 -- 24 October 2012)
+Warning: Search not completed
+	+ Partial Order Reduction
+
+Bit statespace search for:
+	never claim         	+ (num_interrogations)
+	assertion violations	+ (if within scope of claim)
+	acceptance   cycles 	- (not selected)
+	invalid end states	- (disabled by -E flag)
+
+State-vector 37435 byte, depth reached 110799, errors: 0
+    55401 states, stored
+    28608 states, matched
+    84009 transitions (= stored+matched)
+        0 atomic steps
+
+hash factor: 2422.66 (best if > 100.)
+
+bits set per state: 3 (-k3)
+
+Stats on memory usage (in Megabytes):
+ 1979.339	equivalent memory usage for states (stored*(State-vector + overhead))
+   16.000	memory used for hash array (-w27)
+    3.815	memory used for bit stack
+   26.703	memory used for DFS stack (-m500000)
+ 1979.537	other (proc and chan stacks)
+   16.648	memory lost to fragmentation
+ 2042.703	total actual memory usage
+
+
+
+pan: elapsed time 5.38 seconds
+pan: rate 10297.584 states/second
