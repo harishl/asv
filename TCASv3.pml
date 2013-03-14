@@ -1,8 +1,8 @@
 #define airspace_xlim 5
 #define airspace_ylim 5
 #define airspace_zlim 5
-#define NumAircraft 10 /*Number of Aircraft processes to be created*/
-#define maxVelocity 1
+#define NumAircraft 20 /*Number of Aircraft processes to be created*/
+#define maxVelocity 3
 #define RA_proportionality_const 1
 #define TA_proportionality_const 2
 #define show_stopper_bound 100 /*compromise to escape from unreasonable state spaces*/
@@ -35,7 +35,7 @@ bit moveCalledAfterCollision;
 inline move() {
 	if
 	::collisions[_pid] == 1 -> moveCalledAfterCollision = 1;
-	::else
+	::else 
 	fi;
 	if
 	::show_stopper[_pid] <= show_stopper_bound -> show_stopper[_pid] = show_stopper[_pid] + 1;
@@ -192,7 +192,7 @@ an aircraft with velocity = maxVelocity will take 1 step to move 1 cell. */
 	od;
 
 /* Main 	
-  4.1 Move Aircraft as per speed
+  4.1 Move Aircraft in accordance to speed while doing all of the below
   4.2 Send interrogation message 
   4.3 Receive interrogation msgs and Send responses
   4.4 Recieve responses and compute and send RA decision if required
@@ -298,9 +298,6 @@ proctype changeCollisionTestPID() {
 }
 /*Each airplane can have atmost 1 message in the interrogation channel. It sends another message only if it has received replies for all of its previously sent messages. */
 ltl num_interrogations { [] (len(interrogation) < NumAircraft) };
-
-/*Aircraft should keep moving often till it collides or terminates*/
-ltl collision_releases_movement { (collisions[collisionTestPID] == 0) U ([] !(moveCall(collisionTestPID))) };
 
 never {
 	do

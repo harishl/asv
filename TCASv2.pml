@@ -1,8 +1,8 @@
-#define airspace_xlim 2
-#define airspace_ylim 2
-#define airspace_zlim 2
-#define NumAircraft 3 /*Number of Aircraft processes to be created*/
-#define maxVelocity 1
+#define airspace_xlim 5
+#define airspace_ylim 5
+#define airspace_zlim 5
+#define NumAircraft 10 /*Number of Aircraft processes to be created*/
+#define maxVelocity 3
 #define RA_proportionality_const 1
 #define TA_proportionality_const 2
 #define show_stopper_bound 100 /*compromise to escape from unreasonable state spaces*/

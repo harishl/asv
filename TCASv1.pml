@@ -1,8 +1,8 @@
-#define airspace_xlim 2
-#define airspace_ylim 2
-#define airspace_zlim 2
-#define NumAircraft 3 /*Number of Aircraft processes to be created*/
-#define maxVelocity 1
+#define airspace_xlim 5
+#define airspace_ylim 5
+#define airspace_zlim 5
+#define NumAircraft 10 /*Number of Aircraft processes to be created*/
+#define maxVelocity 3
 #define RA_proportionality_const 1
 #define TA_proportionality_const 2
 #define show_stopper_bound 100 /*compromise to escape from unreasonable state spaces*/
@@ -269,7 +269,7 @@ an aircraft with velocity = maxVelocity will take 1 step to move 1 cell. */
 	::Advisory_chan?maintain; move(); 
 	::Advisory_chan?traffic; move(); 
 	::Advisory_chan?collided; break;/* Mayday! Mayday! ... and Boom! */
-	::show_stopper[_pid] >= show_stopper_bound -> break; /*compromise to avoid unreasonably large state spaces*/
+	::show_stopper[_pid] >= show_stopper_bound -> break; /*compromise to avoid infinite run of aircraft*/
 	od;
 			
 }
